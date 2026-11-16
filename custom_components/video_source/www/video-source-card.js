@@ -17,7 +17,10 @@ class VideoSourceCard extends LitElement {
         super();
         this.fullscreen = false;
         this.mute = true;
+        this.talking = false;
+        this.twoWayAudioSupported = false;
         this.iframe = document.createElement('iframe');
+        this.iframe.allow = 'microphone; autoplay';
         this.ongoingEvents = [];
         this.dismissedEvents = new Set();
         this.offDebounceTimers = new Map();
@@ -52,6 +55,20 @@ class VideoSourceCard extends LitElement {
                         html``
                     }
                                         <button type="button" @click="${this.restartVideo}"><ha-icon icon="mdi:restart"></ha-icon></button>
+                                        ${this.isTwoWayAudioEnabled() ?
+                        html`
+                                                <button
+                                                    type="button"
+                                                    class="two-way-audio ${this.talking ? 'talking' : ''}"
+                                                    @pointerdown="${this.startTwoWayAudio}"
+                                                    @pointerup="${this.stopTwoWayAudio}"
+                                                    @pointercancel="${this.stopTwoWayAudio}"
+                                                    @lostpointercapture="${this.stopTwoWayAudio}"
+                                                    @contextmenu="${this.preventContextMenu}"
+                                                >${this.talking ? html`<ha-icon icon="mdi:microphone"></ha-icon>` : html`<ha-icon icon="mdi:microphone-off"></ha-icon>`}</button>
+                                            ` :
+                        html``
+                    }
                                     </div>
                                 `
                 :
@@ -195,6 +212,10 @@ class VideoSourceCard extends LitElement {
                 this.fullScreenAutoToggled = false;
             }
         } else {
+            if (this.talking) {
+                this.talking = false;
+                this.postMessage('twoWayAudio', false);
+            }
             this.mute = true;
             this.fullScreenAutoToggled = false;
             this.ongoingEvents.forEach(event => {
@@ -225,6 +246,95 @@ class VideoSourceCard extends LitElement {
         this.postMessage('restart', true);
     }
 
+    // Two-way audio needs the option enabled on the card AND a source that supports it
+    // (go2rtc). What the source supports is reported by the video iframe once it has
+    // looked up the integration entry.
+    isTwoWayAudioEnabled() {
+        return this.config?.twoWayAudio === true && this.twoWayAudioSupported === true;
+    }
+
+    // Messages sent back from the video iframe (capabilities, two-way audio failures).
+    onIframeMessage = (e) => {
+        if (e.source !== this.iframe.contentWindow || e.origin !== window.location.origin) {
+            return;
+        }
+        if (e.data?.key === 'capabilities') {
+            this.twoWayAudioSupported = e.data.value?.twoWayAudio === true;
+            if (this.config?.twoWayAudio === true && !this.twoWayAudioSupported) {
+                console.warn('video-source-card: "twoWayAudio" is only supported by go2rtc integrations and will be ignored for this card.');
+            }
+            this.requestUpdate();
+        } else if (e.data?.key === 'twoWayAudioError') {
+            if (this.talking) {
+                this.talking = false;
+                this.requestUpdate();
+            }
+            const message = e.data.value || 'Two-way audio is unavailable';
+            console.warn(`video-source-card: ${message}`);
+            this.dispatchEvent(new CustomEvent('hass-notification', {
+                detail: { message },
+                bubbles: true,
+                composed: true,
+            }));
+        }
+    };
+
+    connectedCallback() {
+        super.connectedCallback();
+        window.addEventListener('message', this.onIframeMessage);
+    }
+
+    disconnectedCallback() {
+        window.removeEventListener('message', this.onIframeMessage);
+        if (this.talking) {
+            this.talking = false;
+            this.postMessage('twoWayAudio', false);
+        }
+        super.disconnectedCallback();
+    }
+
+    startTwoWayAudio(e) {
+        if (e?.button !== undefined && e.button !== 0) {
+            return; // primary button / touch / pen only
+        }
+        e?.preventDefault();
+        e?.stopPropagation();
+        try {
+            e?.currentTarget?.setPointerCapture?.(e.pointerId);
+        } catch (_) { /* ignore */ }
+        if (this.talking) {
+            return;
+        }
+        this.talking = true;
+        if (this.mute) {
+            this.mute = false;
+            this.postMessage('mute', false);
+        }
+        this.postMessage('twoWayAudio', true);
+        this.requestUpdate();
+    }
+
+    stopTwoWayAudio(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        if (e?.pointerId !== undefined) {
+            try {
+                e?.currentTarget?.releasePointerCapture?.(e.pointerId);
+            } catch (_) { /* ignore */ }
+        }
+        if (!this.talking) {
+            return;
+        }
+        this.talking = false;
+        this.postMessage('twoWayAudio', false);
+        this.requestUpdate();
+    }
+
+    preventContextMenu(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+    }
+
     firstUpdated() {
         this.iframe.onload = () => {
             const key = this.fullScreenAutoToggled ? 'autofullscreen' : 'fullscreen';
@@ -243,11 +353,12 @@ class VideoSourceCard extends LitElement {
             throw new Error("You need to define a resource");
         }
         if (config.source !== undefined) {
-            const source = String(config.source).trim().toLowerCase();
-            if (source !== 'mediamtx' && source !== 'go2rtc') {
-                throw new Error(`Unsupported source "${config.source}", expected "MediaMTX" or "go2RTC"`);
-            }
-            config = { ...config, source };
+            console.warn('video-source-card: "source" is no longer a card option. Whether a card uses MediaMTX or go2rtc is now chosen when you set up the integration; use "entry_id" to pick which integration entry the card uses. The option is ignored.');
+            const { source, ...rest } = config;
+            config = rest;
+        }
+        if (config.twoWayAudio !== undefined && typeof config.twoWayAudio !== 'boolean') {
+            throw new Error('"twoWayAudio" must be true or false');
         }
         if (config.intercom) {
             this.intercomConfig = { ...{ display: 'single' }, ...config.intercom };
@@ -367,6 +478,14 @@ class VideoSourceCard extends LitElement {
             color: white;
             display: block;
             margin-bottom: 10px;
+        }
+        .webrtc-video-controls button.two-way-audio {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .webrtc-video-controls button.two-way-audio.talking {
+            background-color: rgba(200, 40, 40, 0.85);
         }
         .webrtc-video-controls ha-intercom-card {
             margin-bottom: 10px;

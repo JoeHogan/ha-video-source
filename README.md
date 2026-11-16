@@ -1,19 +1,20 @@
 # Video Source Integration for Home Assistant
 
-This integration provides a WebRTC Video component for MediaMTX within Home Assistant.
+This integration provides a WebRTC Video component for MediaMTX or go2rtc within Home Assistant.
 
 ## Features
 
-- A WebRTC video component for Home Assistant and MediaMTX
-- Choice of authentication to MediaMTX server:
-  - Via Home Assistant before being proxied to your MediaMTX instance.
+- A WebRTC video component for Home Assistant, backed by MediaMTX or go2rtc (your own instance, or Home Assistant's built-in go2rtc)
+- Choice of authentication to your MediaMTX / go2rtc server:
+  - Via Home Assistant before being proxied to your MediaMTX / go2rtc instance.
   - `BASIC` authentication proxied via Home Assistant
   - None
 - Built for "wife friendly" use. Tap to go full screen, tap again to return.
 - Ideal for Kiosks. When not full screen, live video will not keep your screen alive, so your Kiosk can sleep properly.
 - Support for 'activities' to call attention to people/objects in video
 - Support for 'events' which can automatically set video to full screen
-- Support for multiple MediaMTX servers
+- Support for multiple servers, in any mix of MediaMTX and go2rtc (add the integration once per server)
+- Press-and-hold two-way audio (go2rtc only)
 
 ![Video Dashboard Example](assets/dashboard.png)
 
@@ -27,23 +28,39 @@ https://github.com/JoeHogan/ha-video-source
 with category **Integration**.
 3. Install **Video Source Integration**.
 4. Restart Home Assistant.
-5. Add the integration via *Settings → Devices & Services → Add Integration → MediaMTX*.
-6. Input the URL and port of each of your MediaMTX instance
+5. Add the integration via *Settings → Devices & Services → Add Integration → Video Source*.
+6. Follow the setup wizard (see below). Repeat for each server you want to use.
 
 ## Configuration
 
-You’ll be prompted for your MediaMTX service URL (e.g. `http://192.168.1.X:8899`).
+Setting up the integration is a short wizard. You can add the integration as many times as you like, once per server.
 
+**Step 1 - choose your video source:** *MediaMTX* or *go2rtc*.
+
+**Step 2 - configure it:**
+
+- **MediaMTX:** enter your MediaMTX service URL (e.g. `http://192.168.1.X:8899`) and how Home Assistant should authenticate with it.
+- **go2rtc:** enter the URL of your own go2rtc instance (e.g. `http://192.168.1.X:1984`), then choose how to authenticate with it. **Leave the URL blank to use Home Assistant's built-in go2rtc** (nothing else to configure).
+
+Which server a card uses is decided by the integration entry it points to (see `entry_id` below), not by the card itself.
+
+| Source | What `resource` is |
+| --- | --- |
+| MediaMTX | the name of the stream/path in MediaMTX |
+| go2rtc (your own instance) | the stream name from your go2rtc configuration |
+| go2rtc (Home Assistant built-in) | a camera entity, e.g. `camera.driveway_camera` |
+
+> Your own go2rtc instance is reached by your browser over WebRTC on the local network, with signaling proxied through Home Assistant. Remote viewers need a way to reach go2rtc's WebRTC port (VPN, or port forwarding / TURN).
 ## Card Options
 
 ### type
     Required: custom:video-source-card
 
 ### resource
-    Required: the name of your MediaMTX camera stream
+    Required: the name of your camera stream. For MediaMTX / your own go2rtc this is the stream name; for Home Assistant's built-in go2rtc it is a camera entity id (e.g. camera.driveway_camera).
 
 ### entry_id
-    Optional: ID of the MediaMTX server to use, if using more than one. Copy paste from settings page.
+    Optional: ID of the integration entry (MediaMTX or go2rtc server) to use. Copy paste from settings page. If omitted, the first configured entry is used, so set this whenever you have more than one entry.
 
 ![Entry ID](assets/entry_id.png)
 
@@ -66,6 +83,9 @@ You’ll be prompted for your MediaMTX service URL (e.g. `http://192.168.1.X:889
 
 ### preview
     Advanced/Optional: Show preview images to reduce memory. See advanced configuration information. 
+
+### twoWayAudio
+    Optional (default false): show a press-and-hold microphone button in full screen that sends your microphone audio to the camera speaker. Only available when the card's integration entry is go2rtc (not MediaMTX), requires a camera that supports an audio backchannel, and requires Home Assistant to be accessed over HTTPS (browsers block microphone access otherwise). Pressing the button unmutes the video if it is muted; releasing it stops sending audio but does not re-mute.
 
 ## Card Usage Examples
 

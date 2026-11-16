@@ -2,23 +2,50 @@
   "config": {
     "step": {
       "user": {
+        "title": "Choose your video source",
+        "description": "Which kind of server provides your video streams? You can add this integration multiple times, once for each server."
+      },
+      "mediamtx": {
         "title": "Configure MediaMTX",
         "description": "Enter the full url and port of your MediaMTX instance.",
         "data": {
-          "service_id": "ID/alias for this service. Use this to reference in custom cards",
           "service_url": "Service URL (e.g. http://192.168.1.10:8889)",
-          "auth_method": "none=no authentication, pass-thru=Same authorization header as home assistant, basic=username+password",
-          "auth_basic_username": "username for basic authentication",
-          "auth_basic_password": "password for basic authentication"
+          "auth_method": "Authentication (none, pass-thru = same authorization header as Home Assistant, or basic = username + password)",
+          "auth_basic_username": "Username for basic authentication",
+          "auth_basic_password": "Password for basic authentication"
+        }
+      },
+      "go2rtc": {
+        "title": "Configure go2rtc",
+        "description": "Enter the URL of your own go2rtc instance (e.g. http://192.168.1.10:1984), or leave it blank to use Home Assistant's built-in go2rtc. When using the built-in go2rtc, the card's `resource` is a camera entity (e.g. camera.driveway); with your own instance it is a stream name from your go2rtc config.",
+        "data": {
+          "service_url": "go2rtc URL (leave blank to use Home Assistant's built-in go2rtc)"
+        }
+      },
+      "go2rtc_auth": {
+        "title": "go2rtc authentication",
+        "description": "How should Home Assistant authenticate with your go2rtc instance?",
+        "data": {
+          "auth_method": "Authentication (none, pass-thru = same authorization header as Home Assistant, or basic = username + password)",
+          "auth_basic_username": "Username for basic authentication",
+          "auth_basic_password": "Password for basic authentication"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure authentication",
+        "data": {
+          "auth_method": "Authentication (none, pass-thru = same authorization header as Home Assistant, or basic = username + password)",
+          "auth_basic_username": "Username for basic authentication",
+          "auth_basic_password": "Password for basic authentication"
         }
       }
     },
     "error": {
-      "invalid_url": "Please enter a valid URL starting with http:// or https://",
-      "invalid_id": "Please enter a valid ID for this service. No spaces or special characters allowed"
+      "invalid_url": "Please enter a valid URL starting with http:// or https://"
     },
     "abort": {
-      "already_configured": "This service is already configured."
+      "already_configured": "This service is already configured.",
+      "reconfigure_not_needed": "Home Assistant's built-in go2rtc has no settings to reconfigure."
     }
   }
 }

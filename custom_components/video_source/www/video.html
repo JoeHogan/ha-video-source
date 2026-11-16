@@ -97,32 +97,70 @@
                     this.ctx = this.canvas.getContext("2d");
                     this.image = document.createElement('img');
                     this.image.setAttribute("id", "image");
+                    document.body.appendChild(this.video);
+                    document.body.appendChild(this.canvas);
+                    document.body.appendChild(this.image);
+                    this.init();
+                }
+
+                // Asks the backend which kind of source (MediaMTX / go2rtc) the integration entry
+                // used by this card is. 'default' (no entry_id) resolves to the first entry.
+                async resolveEntry() {
+                    const entryId = encodeURIComponent(this.config.entry_id || 'default');
+                    const access_token = await getAccessToken();
+                    const res = await fetch(`/api/ha-video-source-config/${entryId}`, {
+                        headers: { "Authorization": `Bearer ${access_token}` },
+                    });
+                    if (!res.ok) {
+                        const error = new Error(`HTTP ${res.status}`);
+                        error.status = res.status;
+                        throw error;
+                    }
+                    return res.json();
+                }
+
+                async init() {
+                    let entry = null;
+                    while (!entry) {
+                        try {
+                            entry = await this.resolveEntry();
+                        } catch (err) {
+                            console.error(`Unable to find the Video Source integration${this.config.entry_id ? ` "${this.config.entry_id}"` : ''}: ${err.message}`);
+                            await new Promise((res) => setTimeout(res, 5000)); // e.g. HA still starting
+                        }
+                    }
+                    this.config.entry_id = entry.entry_id;
+                    this.config.source = entry.source;
+                    this.config.builtin = entry.builtin;
+                    if (this.config.source === 'go2rtc') {
+                        this.config.preview = false; // image previews are only available for MediaMTX
+                    }
                     const ClientClass = this.config.source === 'go2rtc' ? Go2RtcClient : WHEPClient;
                     this.client = new ClientClass(this.config, {
                         connectionStateCb: this.connectionStateCb.bind(this),
                         retryCb: this.retryCb.bind(this),
-                        onTrackCb: this.onTrackCb.bind(this)
+                        onTrackCb: this.onTrackCb.bind(this),
+                        twoWayAudioErrorCb: (message) => {
+                            window.parent?.postMessage({ key: 'twoWayAudioError', value: message }, window.location.origin);
+                        }
                     });
+                    // Let the card know what this source can do (only go2rtc supports two-way audio)
+                    window.parent?.postMessage({
+                        key: 'capabilities',
+                        value: { twoWayAudio: this.config.source === 'go2rtc' },
+                    }, window.location.origin);
                     if(this.config.preview) {
                         this.playImagePreview();
                     } else {
                         this.restartStream();
                     }
-                    document.body.appendChild(this.video);
-                    document.body.appendChild(this.canvas);
-                    document.body.appendChild(this.image);
                 }
 
                 getConfig() {
                     let queryString = window.location.href.split("?")[1];
                     let parts = queryString?.split('=') || [];
                     let index = parts.indexOf('config');
-                    let config = index > -1 ? JSON.parse(atob(parts[index+1])) : {};
-                    config.source = String(config.source || 'mediamtx').trim().toLowerCase();
-                    if (config.source === 'go2rtc') {
-                        config.preview = false; // image previews are only available for MediaMTX
-                    }
-                    return config;
+                    return index > -1 ? JSON.parse(atob(parts[index+1])) : {};
                 }
 
                 play() {
@@ -184,32 +222,7 @@
                     return true;
                 }
 
-                async logVideoDiagnostics() {
-                    const res = this.config.resource;
-                    console.log(`[diag] ${res} video element: ${this.video.videoWidth}x${this.video.videoHeight}, readyState=${this.video.readyState}, paused=${this.video.paused}, currentTime=${this.video.currentTime}`);
-                    try {
-                        const stats = await this.client?.pc?.getStats();
-                        stats?.forEach((s) => {
-                            if (s.type === 'inbound-rtp') {
-                                const codec = s.codecId ? stats.get(s.codecId)?.mimeType : undefined;
-                                console.log(`[diag] ${res} inbound-rtp ${s.kind}: codec=${codec}, bytesReceived=${s.bytesReceived}, packetsReceived=${s.packetsReceived}, framesDecoded=${s.framesDecoded}, framesDropped=${s.framesDropped}, decoderImpl=${s.decoderImplementation}`);
-                            }
-                        });
-                    } catch (e) {
-                        console.log(`[diag] ${res} stats error: ${e}`);
-                    }
-                }
-
                 onTrackCb(evt) {
-                    if(evt?.track) {
-                        console.log(`[diag] ${this.config.resource} ${evt.track.kind} track muted=${evt.track.muted}, readyState=${evt.track.readyState}`);
-                        evt.track.onunmute = () => console.log(`[diag] ${this.config.resource} ${evt.track.kind} track unmuted (media flowing)`);
-                        if (evt.track.kind === 'video') {
-                            this.video.onloadedmetadata = () => console.log(`[diag] ${this.config.resource} loadedmetadata ${this.video.videoWidth}x${this.video.videoHeight}`);
-                            setTimeout(() => this.logVideoDiagnostics(), 3000);
-                            setTimeout(() => this.logVideoDiagnostics(), 8000);
-                        }
-                    }
                     if(evt?.streams?.length) {
                         console.log(`New ${this.config.resource} track: ${evt.track.kind}, streams: ${evt.streams.length}`);
                         if (this.video.srcObject !== evt.streams[0]) {
@@ -225,6 +238,7 @@
                 }
 
                 stopStream() {
+                    this.client?.stopTwoWayAudio?.();
                     this.video?.pause();
                     if (this.video) {
                         this.video.srcObject = null;
@@ -233,6 +247,14 @@
                     }
                     this.startingToPlay = null;
                     this.client?.stop();
+                }
+
+                toggleTwoWayAudio(active) {
+                    if (active) {
+                        this.client?.startTwoWayAudio?.();
+                    } else {
+                        this.client?.stopTwoWayAudio?.();
+                    }
                 }
 
                 toggleLoading(loading) {
@@ -344,6 +366,8 @@
                         controls.toggleMute(value || false);
                     } else if (key === 'restart') {
                         controls.restartStream();
+                    } else if (key === 'twoWayAudio') {
+                        controls.toggleTwoWayAudio(value || false);
                     }
                 };
             });
