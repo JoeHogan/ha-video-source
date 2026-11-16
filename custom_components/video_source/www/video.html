@@ -184,7 +184,32 @@
                     return true;
                 }
 
+                async logVideoDiagnostics() {
+                    const res = this.config.resource;
+                    console.log(`[diag] ${res} video element: ${this.video.videoWidth}x${this.video.videoHeight}, readyState=${this.video.readyState}, paused=${this.video.paused}, currentTime=${this.video.currentTime}`);
+                    try {
+                        const stats = await this.client?.pc?.getStats();
+                        stats?.forEach((s) => {
+                            if (s.type === 'inbound-rtp') {
+                                const codec = s.codecId ? stats.get(s.codecId)?.mimeType : undefined;
+                                console.log(`[diag] ${res} inbound-rtp ${s.kind}: codec=${codec}, bytesReceived=${s.bytesReceived}, packetsReceived=${s.packetsReceived}, framesDecoded=${s.framesDecoded}, framesDropped=${s.framesDropped}, decoderImpl=${s.decoderImplementation}`);
+                            }
+                        });
+                    } catch (e) {
+                        console.log(`[diag] ${res} stats error: ${e}`);
+                    }
+                }
+
                 onTrackCb(evt) {
+                    if(evt?.track) {
+                        console.log(`[diag] ${this.config.resource} ${evt.track.kind} track muted=${evt.track.muted}, readyState=${evt.track.readyState}`);
+                        evt.track.onunmute = () => console.log(`[diag] ${this.config.resource} ${evt.track.kind} track unmuted (media flowing)`);
+                        if (evt.track.kind === 'video') {
+                            this.video.onloadedmetadata = () => console.log(`[diag] ${this.config.resource} loadedmetadata ${this.video.videoWidth}x${this.video.videoHeight}`);
+                            setTimeout(() => this.logVideoDiagnostics(), 3000);
+                            setTimeout(() => this.logVideoDiagnostics(), 8000);
+                        }
+                    }
                     if(evt?.streams?.length) {
                         console.log(`New ${this.config.resource} track: ${evt.track.kind}, streams: ${evt.streams.length}`);
                         if (this.video.srcObject !== evt.streams[0]) {
