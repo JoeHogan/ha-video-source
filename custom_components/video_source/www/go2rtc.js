@@ -37,6 +37,22 @@ export class Go2RtcClient {
         return new Promise((res) => setTimeout(res, delay || 0));
     }
 
+    // Limit the offer to H.264 (plus its retransmission/FEC helper codecs). Without this,
+    // newer browsers also offer H.265/AV1/VP9 and go2rtc may answer with a codec that
+    // the browser connects to but never decodes (packets arrive, framesDecoded stays 0).
+    preferH264(transceiver) {
+        try {
+            const codecs = RTCRtpReceiver.getCapabilities?.('video')?.codecs;
+            if (!codecs || !transceiver.setCodecPreferences) return;
+            const h264 = codecs.filter((c) => c.mimeType.toLowerCase() === 'video/h264');
+            if (!h264.length) return;
+            const helpers = codecs.filter((c) => /\/(rtx|red|ulpfec)$/i.test(c.mimeType));
+            transceiver.setCodecPreferences([...h264, ...helpers]);
+        } catch (e) {
+            console.log(`go2rtc: unable to set codec preferences: ${e}`);
+        }
+    }
+
     async start() {
         const gen = ++this.generation;
         try {
@@ -62,7 +78,8 @@ export class Go2RtcClient {
             if (dataChannel) {
                 pc.createDataChannel(dataChannel);
             }
-            pc.addTransceiver('video', { direction: 'recvonly' });
+            const videoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+            this.preferH264(videoTransceiver);
             pc.addTransceiver('audio', { direction: 'recvonly' });
 
             pc.ontrack = (evt) => {
@@ -131,6 +148,7 @@ export class Go2RtcClient {
                 break;
             case 'answer':
                 try {
+                    console.log(`go2rtc answer video section: ${(msg.answer || '').split('m=').find((s) => s.startsWith('video'))?.split('\r\n').filter((l) => /^(video|a=rtpmap|a=fmtp|a=recvonly|a=sendonly|a=inactive)/.test(l)).join(' | ')}`);
                     await this.pc?.setRemoteDescription({ type: 'answer', sdp: msg.answer });
                 } catch (err) {
                     this.handleConnectionError(err);
