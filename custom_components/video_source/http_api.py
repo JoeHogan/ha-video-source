@@ -114,8 +114,8 @@ async def async_register_mediamtx_proxy(hass: HomeAssistant, entry: ConfigEntry)
 
     # Register the route manually (wildcard = all methods)
     hass.http.app.router.add_route(
-        "*", f"/api/mediamtx/{entry.entry_id}/{{tail:.*}}", handle_proxy
+        "*", f"/api/ha-video-source/{entry.entry_id}/{{tail:.*}}", handle_proxy
     )
     hass.http.app.router.add_route(
-        "*", f"/api/mediamtx/default/{{tail:.*}}", handle_proxy
+        "*", f"/api/ha-video-source/default/{{tail:.*}}", handle_proxy
     )
