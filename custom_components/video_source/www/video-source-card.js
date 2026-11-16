@@ -1,0 +1,434 @@
+import {
+    LitElement,
+    html,
+    css
+} from "./lit-element.bundle.js";
+
+const SUPPORTED_ASPECT_RATIOS = {
+    '4:3': '4 / 3',
+    '4/3': '4 / 3',
+    '16:9': '16 / 9',
+    '16/9': '16 / 9',
+};
+
+class VideoSourceCard extends LitElement {
+
+    constructor() {
+        super();
+        this.fullscreen = false;
+        this.mute = true;
+        this.iframe = document.createElement('iframe');
+        this.ongoingEvents = [];
+        this.dismissedEvents = new Set();
+        this.offDebounceTimers = new Map();
+    }
+
+    static get properties() {
+        return {
+            hass: {},
+            config: {},
+        };
+    }
+
+    render() {
+        return html`
+            <ha-card>
+                <div class="webrtc-video ${this.fullscreen ? 'fullscreen' : ''} ${this.getActivity().length ? 'activity' : ''} ${this.getOpenOnEvent() ? 'ongoing-event' : ''}">
+
+                    <div class="webrtc-video-container" style="${this.getAspectRatioStyle()}">
+
+                        <div class="webrtc-video-overlay" @click="${this.toggleFullscreen}">
+
+                            ${this.getActivityBadges()}
+
+                            ${this.fullscreen ?
+                html`
+                                    <div class="webrtc-video-controls" @click="${this.controlsClicked}">
+                                        <button type="button" @click="${this.toggleMute}">${this.mute ? html`<ha-icon icon="mdi:volume-off"></ha-icon>` : html`<ha-icon icon="mdi:volume-high"></ha-icon>`}</button>
+                                        ${this.intercomConfig && 1 === 2 ?
+                        html`
+                                                <ha-intercom-card .hass=${this.hass} .config=${this.intercomConfig}></ha-intercom-card>
+                                            ` :
+                        html``
+                    }
+                                        <button type="button" @click="${this.restartVideo}"><ha-icon icon="mdi:restart"></ha-icon></button>
+                                    </div>
+                                `
+                :
+                html``
+            }
+
+                            ${this.getName()}
+
+                        </div>
+
+                        ${this.iframe}
+
+                    </div>
+
+                </div>
+            </ha-card>
+        `;
+    }
+
+    getActivity() {
+        if (this.config?.activity && this.hass?.states) {
+            let activities = Array.isArray(this.config.activity) ? this.config.activity : [this.config.activity];
+            return activities.filter((activity) => {
+                let entity = this.hass.states[activity?.entity] || {};
+                let state = entity.state || 'Unknown';
+                let matchState = activity.state || true; // default matching state
+                return state === matchState ? true : false;
+            });
+        }
+        return [];
+    }
+
+    getOpenOnEvent() {
+        if (this.config?.event && this.hass?.states) {
+            let events = Array.isArray(this.config.event) ? this.config.event : [this.config.event];
+            let ongoingEvents = events.filter((event) => {
+                let entity = this.hass.states[event?.entity] || {};
+                let state = entity.state || 'Unknown';
+                let matchState = event.state || true; // default matching state
+                let show = state === matchState ? true : false;
+
+                let existing = this.ongoingEvents.find(oe => oe.entity === event.entity);
+                if (existing) {
+                    if (!show) {
+                        // Sensor went off — debounce before removing so brief
+                        // flickers don't reset dismissal state
+                        if (!this.offDebounceTimers.has(event.entity)) {
+                            let debounceMs = (event.debounceSeconds || 30) * 1000;
+                            let timer = setTimeout(() => {
+                                // Debounce expired — sensor genuinely off, full reset
+                                this.ongoingEvents = this.ongoingEvents.filter(oe => oe.entity !== event.entity);
+                                this.dismissedEvents.delete(event.entity);
+                                this.offDebounceTimers.delete(event.entity);
+                                this.requestUpdate();
+                            }, debounceMs);
+                            this.offDebounceTimers.set(event.entity, timer);
+                        }
+                        // During debounce, preserve current show state so
+                        // fullscreen stays open if user hasn't dismissed
+                        return existing.show;
+                    }
+                    // Sensor is on — cancel any pending off-debounce
+                    if (this.offDebounceTimers.has(event.entity)) {
+                        clearTimeout(this.offDebounceTimers.get(event.entity));
+                        this.offDebounceTimers.delete(event.entity);
+                    }
+                    // If user already dismissed this event, don't re-open
+                    if (this.dismissedEvents.has(event.entity)) {
+                        return false;
+                    }
+                    if (existing.show) {
+                        return true;
+                    }
+                    return false;
+                }
+                if (!show) {
+                    return false; // not existing but not a matching event
+                }
+                // New event — if user previously dismissed during this
+                // detection cycle (shouldn't normally happen with debounce
+                // but acts as a safety net), respect the dismissal
+                if (this.dismissedEvents.has(event.entity)) {
+                    let oe = { ...event, ...{ show: false } };
+                    this.ongoingEvents.push(oe);
+                    return false;
+                }
+                let oe = { ...event, ...{ show: true } };
+                this.ongoingEvents.push(oe); // new event. show by default
+                if (event.timeoutSeconds) {
+                    setTimeout(() => {
+                        oe.show = false; // if event has a timeout configured, trigger visibility change
+                        this.requestUpdate();
+                    }, event.timeoutSeconds * 1000);
+                }
+                return true;
+
+            })
+            let hasOngoingEvents = ongoingEvents?.length || false;
+
+            if (hasOngoingEvents) {
+                if (!this.hasOngoingEvents) {
+                    this.hasOngoingEvents = true;
+                    if (!this.fullscreen) {
+                        this.fullScreenAutoToggled = true;
+                        this.toggleFullscreen();
+                    }
+                }
+            } else if (this.hasOngoingEvents) {
+                this.hasOngoingEvents = false;
+                if (this.fullscreen && this.fullScreenAutoToggled) {
+                    if (this.fullscreen) {
+                        this.toggleFullscreen();
+                    }
+                    this.fullScreenAutoToggled = false;
+                }
+            }
+
+            return hasOngoingEvents;
+        }
+        return false;
+    }
+
+    postMessage(key, value, attempt = 0) {
+        if (!this.iframe.contentWindow) {
+            if (attempt < 3) {
+                setTimeout(() => this.postMessage(key, value, attempt + 1), 500);
+            }
+        } else {
+            this.iframe.contentWindow.postMessage({ key, value }, window.location.origin);
+        }
+    }
+
+    toggleFullscreen(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        this.fullscreen = this.fullscreen ? false : true;
+        const wasAutoToggled = this.fullScreenAutoToggled;
+        if (this.fullscreen) {
+            if (e) {
+                this.mute = false;
+                this.fullScreenAutoToggled = false;
+            }
+        } else {
+            this.mute = true;
+            this.fullScreenAutoToggled = false;
+            this.ongoingEvents.forEach(event => {
+                event.show = false;
+                this.dismissedEvents.add(event.entity); // remember user dismissed this event
+            });
+        }
+        const key = (this.fullScreenAutoToggled || (wasAutoToggled && !e) || !e) ? 'autofullscreen' : 'fullscreen';
+        this.postMessage(key, this.fullscreen);
+        this.postMessage('mute', this.mute);
+        this.requestUpdate();
+    }
+
+    controlsClicked(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    toggleMute() {
+        this.mute = this.mute ? false : true;
+        this.postMessage('mute', this.mute);
+        this.requestUpdate();
+    }
+
+    restartVideo(e) {
+        e?.preventDefault();
+        e?.stopPropagation();
+        this.postMessage('restart', true);
+    }
+
+    firstUpdated() {
+        this.iframe.onload = () => {
+            const key = this.fullScreenAutoToggled ? 'autofullscreen' : 'fullscreen';
+            this.postMessage(key, this.fullscreen);
+            this.postMessage('mute', this.mute);
+        };
+        this.iframe.src = `/video_source/video.html${this.configToQs()}`;
+    }
+
+    configToQs() {
+        return `?config=${btoa(JSON.stringify(this.config || {}))}`;
+    }
+
+    setConfig(config) {
+        if (!config.resource) {
+            throw new Error("You need to define a resource");
+        }
+        if (config.source !== undefined) {
+            const source = String(config.source).trim().toLowerCase();
+            if (source !== 'mediamtx' && source !== 'go2rtc') {
+                throw new Error(`Unsupported source "${config.source}", expected "MediaMTX" or "go2RTC"`);
+            }
+            config = { ...config, source };
+        }
+        if (config.intercom) {
+            this.intercomConfig = { ...{ display: 'single' }, ...config.intercom };
+        }
+        if (config.aspect_ratio !== undefined && !this.normalizeAspectRatio(config.aspect_ratio)) {
+            console.warn(`video-source-card: unsupported aspect_ratio "${config.aspect_ratio}", expected "4:3" or "16:9". Falling back to 16:9.`);
+        }
+        this.config = config;
+    }
+
+    // The height of your card. Home Assistant uses this to automatically
+    // distribute all cards over the available columns.
+    getCardSize() {
+        return 2;
+    }
+
+    getActivityBadges() {
+        let activities = this.getActivity();
+        let unique = activities.map(activity => activity.name || 'Activity').filter((name, i, arr) => arr.indexOf(name) === i);
+        return html`
+            <div class="activities">
+                ${unique.map(name => {
+            return html`
+                        <div class="activity-badge">${name}</div>
+                    `
+        })}
+            </div>
+        `
+    }
+
+    // Only "4:3" and "16:9" (and their "/" equivalents) are supported.
+    // Returns the CSS aspect-ratio value (e.g. "4 / 3") or null if unsupported.
+    normalizeAspectRatio(ar) {
+        if (ar === undefined || ar === null || ar === '') return null;
+        let key = String(ar).trim();
+        return SUPPORTED_ASPECT_RATIOS[key] || null;
+    }
+
+    getAspectRatioStyle() {
+        let value = this.normalizeAspectRatio(this.config?.aspect_ratio) || SUPPORTED_ASPECT_RATIOS['16:9'];
+        return `--video-source-aspect-ratio: ${value};`;
+    }
+
+    getName() {
+        if (this.config.name) {
+            return html`
+                <div class="webrtc-video-name">
+                    <h3>${this.config.name}</h3>
+                </div>
+            `
+        }
+        return null;
+    }
+
+    static get styles() {
+        return css`
+        .webrtc-video {
+            position: relative;
+            overflow: hidden;
+            background-color: rgba(0, 0, 0, 1);
+            border-radius: 10px;
+        }
+        .webrtc-video.fullscreen {
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            border-radius: 0;
+        }
+        .webrtc-video.fullscreen.ongoing-event {
+            z-index: 200;
+        }
+        .webrtc-video.activity {
+            -webkit-animation: activity 1s ease-in-out infinite;
+            animation: activity 1s ease-in-out infinite;
+        }
+        .webrtc-video-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            aspect-ratio: var(--video-source-aspect-ratio, 16 / 9);
+        }
+        .webrtc-video.fullscreen .webrtc-video-container {
+            aspect-ratio: unset;
+        }
+        .webrtc-video-overlay {
+            position: absolute;
+            z-index: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+        .webrtc-video-controls {
+            position: absolute;
+            top: 0;
+            right: 0;
+            padding: 10px;
+            z-index: 1;
+            display: none;
+        }
+        .webrtc-video.fullscreen .webrtc-video-controls {
+            display: block;
+        }
+        .webrtc-video-controls button {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 0;
+            background-color: rgba(0, 100, 150, 0.7);
+            color: white;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .webrtc-video-controls ha-intercom-card {
+            margin-bottom: 10px;
+        }
+        .webrtc-video-name {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.3);
+            color: white;
+            padding: 10px 20px;
+            z-index: 1;
+        }
+        .activities {
+            position: absolute;
+            top: 0;
+            left: 0;
+            padding: 10px;
+            z-index: 1;
+            display: none;
+        }
+        .webrtc-video.activity .activities {
+            display: block;
+        }
+        .activities .activity-badge {
+            font-size: 12px;
+            margin-bottom: 5px;
+            padding: 0px 4px;
+            background-color: orange;
+            color: white;
+            border-radius: 4px;
+        }
+        h3 {
+            margin: 0;
+        }
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        @-webkit-keyframes activity {
+            from, to {
+                box-shadow: 0 0 3px 1px transparent
+            }
+            50% {
+                box-shadow: 0 0 3px 1px red
+            }
+        }
+        @keyframes activity {
+            from, to {
+                box-shadow: 0 0 3px 1px transparent
+            }
+            50% {
+                box-shadow: 0 0 3px 1px red
+            }
+        }
+        `;
+    }
+}
+
+if (!customElements.get("video-source-card")) {
+    customElements.define("video-source-card", VideoSourceCard);
+}

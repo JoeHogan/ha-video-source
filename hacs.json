@@ -1,0 +1,8 @@
+{
+  "name": "Video Source Integration",
+  "content_in_root": false,
+  "render_readme": true,
+  "domain": "video_source",
+  "country": "US",
+  "homeassistant": "2024.6.0"
+}
