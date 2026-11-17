@@ -251,19 +251,7 @@ class HttpSignaling {
     }
 
     async getRtcConfig() {
-        // go2rtc doesn't hand ICE servers to its clients (MediaMTX does, via its OPTIONS
-        // response; Home Assistant's built-in go2rtc does via get_client_config). Without a STUN
-        // server the browser has no public ("server reflexive") address to offer, so when the
-        // browser and go2rtc are on different networks neither side can punch through the
-        // NATs and ICE fails - even though signaling (this proxy) works fine.
-        return {
-            configuration: {
-                iceServers: [
-                    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
-                ],
-            },
-            dataChannel: null,
-        };
+        return { configuration: {}, dataChannel: null };
     }
 
     createSession() {
