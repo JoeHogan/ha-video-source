@@ -244,14 +244,157 @@ class HttpSession {
     }
 }
 
+// Extracts `webrtc.ice_servers` from go2rtc's YAML config (`/api/config`).
+const unquoteYamlScalar = (val) => {
+    const s = val.trim();
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+        return s.slice(1, -1);
+    }
+    return s.replace(/\s+#.*$/, '').trim();
+};
+
+const parseInlineList = (val) => {
+    const s = val.trim();
+    if (s.startsWith('[') && s.endsWith(']')) {
+        return s
+            .slice(1, -1)
+            .split(',')
+            .map((item) => unquoteYamlScalar(item))
+            .filter(Boolean);
+    }
+    const single = unquoteYamlScalar(s);
+    return single ? [single] : [];
+};
+
+const parseIceServersFromYaml = (yamlText) => {
+    if (typeof yamlText !== 'string' || !yamlText) return [];
+    const lines = yamlText.split(/\r?\n/);
+
+    let inWebrtc = false;
+    let webrtcIndent = -1;
+    let inIceServers = false;
+    let iceServersIndent = -1;
+    let inUrlsList = false;
+    let urlsIndent = -1;
+
+    const servers = [];
+    let current = null;
+
+    for (const rawLine of lines) {
+        if (!rawLine.trim() || rawLine.trim().startsWith('#')) continue;
+        const indent = rawLine.match(/^(\s*)/)[1].length;
+        const trimmed = rawLine.trim();
+
+        if (!inWebrtc) {
+            if (/^webrtc\s*:/.test(trimmed)) {
+                inWebrtc = true;
+                webrtcIndent = indent;
+            }
+            continue;
+        }
+
+        if (indent <= webrtcIndent) {
+            break; // left the `webrtc:` block
+        }
+
+        if (!inIceServers) {
+            if (/^ice_servers\s*:/.test(trimmed)) {
+                inIceServers = true;
+                iceServersIndent = indent;
+            }
+            continue;
+        }
+
+        if (indent <= iceServersIndent) {
+            break; // left the `ice_servers:` block
+        }
+
+        if (inUrlsList) {
+            if (indent > urlsIndent && trimmed.startsWith('-')) {
+                const url = unquoteYamlScalar(trimmed.replace(/^-\s*/, ''));
+                if (url && current) current.urls.push(url);
+                continue;
+            }
+            inUrlsList = false;
+        }
+
+        if (trimmed.startsWith('-')) {
+            current = { urls: [] };
+            servers.push(current);
+            const afterDash = trimmed.replace(/^-\s*/, '');
+            if (afterDash) {
+                const kv = afterDash.match(/^([a-zA-Z0-9_]+)\s*:\s*(.*)$/);
+                if (kv) {
+                    const [, key, rest] = kv;
+                    if (key === 'urls') {
+                        if (rest.trim()) {
+                            current.urls.push(...parseInlineList(rest));
+                        } else {
+                            inUrlsList = true;
+                            urlsIndent = indent;
+                        }
+                    } else if (rest.trim()) {
+                        current[key] = unquoteYamlScalar(rest);
+                    }
+                }
+            }
+            continue;
+        }
+
+        if (current) {
+            const kv = trimmed.match(/^([a-zA-Z0-9_]+)\s*:\s*(.*)$/);
+            if (kv) {
+                const [, key, rest] = kv;
+                if (key === 'urls') {
+                    if (rest.trim()) {
+                        current.urls.push(...parseInlineList(rest));
+                    } else {
+                        inUrlsList = true;
+                        urlsIndent = indent;
+                    }
+                } else if (rest.trim()) {
+                    current[key] = unquoteYamlScalar(rest);
+                }
+            }
+        }
+    }
+
+    return servers.filter((s) => Array.isArray(s.urls) && s.urls.length > 0);
+};
+
 class HttpSignaling {
     constructor(baseUrl, src) {
         this.baseUrl = baseUrl;
         this.src = src;
+        this.iceServers = null;
     }
 
     async getRtcConfig() {
-        return { configuration: {}, dataChannel: null };
+        if (this.iceServers === null) {
+            try {
+                const token = await getAccessToken();
+                const res = await fetch(`${this.baseUrl}/api/config`, {
+                    method: 'GET',
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                    },
+                });
+                if (res.ok) {
+                    const yamlText = await res.text();
+                    this.iceServers = parseIceServersFromYaml(yamlText);
+                } else {
+                    console.warn(`go2rtc: unable to fetch /api/config (HTTP ${res.status})`);
+                    this.iceServers = [];
+                }
+            } catch (e) {
+                console.warn(`go2rtc: error fetching /api/config: ${e?.message || e}`);
+                this.iceServers = [];
+            }
+        }
+        return {
+            configuration: this.iceServers.length ? { iceServers: this.iceServers } : {},
+            dataChannel: null,
+        };
     }
 
     createSession() {

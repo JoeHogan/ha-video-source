@@ -14,10 +14,8 @@ webrtc:
   listen: ":8555"
   candidates:
     - jthogan.com:8555
-    - stun:8555
   ice_servers:
-    - urls:
-        - "stun:stun.l.google.com:19302"
+    - urls: [stun:stun.l.google.com:19302]
 
 streams:
 
