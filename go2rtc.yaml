@@ -1,0 +1,188 @@
+api:
+  listen: ":1984"
+  origin: "*"
+
+rtsp:
+  listen: ":8554"
+
+log:
+  # exec: trace
+  # tapo: trace
+  format: text
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - jthogan.com:8555
+    - stun:8555
+  ice_servers:
+    - urls:
+        - "stun:stun.l.google.com:19302"
+
+streams:
+
+  # --- Reolink / RTMP Cameras (with RTSP 2-way audio backchannel) ---
+  driveway:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DRIVEWAY_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway.jpg
+    - rtsp://admin:${DRIVEWAY_PASSWORD}@192.168.1.25:554/h264Preview_01_sub#backchannel=1
+
+  driveway_sub:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DRIVEWAY_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway_sub.jpg
+    - rtsp://admin:${DRIVEWAY_PASSWORD}@192.168.1.25:554/h264Preview_01_sub#backchannel=1
+
+  backyard:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard.jpg
+    - rtsp://admin:${BACKYARD_PASSWORD}@192.168.1.26:554/h264Preview_01_sub#backchannel=1
+
+  backyard_sub:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard_sub.jpg
+    - rtsp://admin:${BACKYARD_PASSWORD}@192.168.1.26:554/h264Preview_01_sub#backchannel=1
+
+  backyard2:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD2_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2.jpg
+    - rtsp://admin:${BACKYARD2_PASSWORD}@192.168.1.29:554/h264Preview_01_sub#backchannel=1
+
+  backyard2_sub:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD2_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2_sub.jpg
+    - rtsp://admin:${BACKYARD2_PASSWORD}@192.168.1.29:554/h264Preview_01_sub#backchannel=1
+
+  doorbell:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DOORBELL_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell.jpg
+    - rtsp://admin:${DOORBELL_PASSWORD}@192.168.1.129:554/h264Preview_01_sub#backchannel=1
+
+  doorbell_sub:
+    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DOORBELL_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell_sub.jpg
+    - rtsp://admin:${DOORBELL_PASSWORD}@192.168.1.129:554/h264Preview_01_sub#backchannel=1
+
+  # --- RTSP Cameras ---
+  kids-room: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_LOCAL_PASSWORD}@192.168.1.23/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room.jpg
+
+  kids-room-2: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_2_LOCAL_PASSWORD}@192.168.1.22/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room-2.jpg
+
+  basement: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT_LOCAL_PASSWORD}@192.168.1.24/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement.jpg
+
+  basement2: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT2_LOCAL_PASSWORD}@192.168.1.27/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement2.jpg
+
+  garage: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${GARAGE_LOCAL_PASSWORD}@192.168.1.28/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/garage.jpg
+
+  # --- Tapo Native Streams (H264 passthrough + 2-way audio + Opus fallback) ---
+  kids-room-tapo:
+    - tapo://${KIDS_ROOM_CLOUD_PASSWORD}@192.168.1.23
+    - ffmpeg:kids-room-tapo#audio=opus
+
+  kids-room-2-tapo:
+    - tapo://${KIDS_ROOM_2_CLOUD_PASSWORD}@192.168.1.22
+    - ffmpeg:kids-room-2-tapo#audio=opus
+
+  basement-tapo:
+    - tapo://${BASEMENT_CLOUD_PASSWORD}@192.168.1.24
+    - ffmpeg:basement-tapo#audio=opus
+
+  basement2-tapo:
+    - tapo://${BASEMENT2_CLOUD_PASSWORD}@192.168.1.27
+    - ffmpeg:basement2-tapo#audio=opus
+
+  garage-tapo:
+    - tapo://${GARAGE_CLOUD_PASSWORD}@192.168.1.28
+    - ffmpeg:garage-tapo#audio=opus
+
+  # --- Multi-Camera Mosaics ---
+  home-cams: >
+    exec:ffmpeg -hide_banner
+    -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1
+    -rtsp_transport tcp -timeout 10000000 -fflags +genpts
+    -thread_queue_size 512 -i rtsp://localhost:8554/basement
+    -thread_queue_size 512 -i rtsp://localhost:8554/basement2
+    -thread_queue_size 512 -i rtsp://localhost:8554/kids-room
+    -thread_queue_size 512 -i rtsp://localhost:8554/garage
+    -filter_complex "
+      [0:v]scale=960:540[v0];
+      [1:v]scale=960:540[v1];
+      [2:v]scale=960:540[v2];
+      [3:v]scale=960:540[v3];
+      [v0][v1][v2][v3]xstack=inputs=4:layout=0_0|960_0|0_540|960_540:shortest=1,fps=30,split=2[v][snap];
+      [snap]fps=1/3[jpg]
+    "
+    -map "[v]"
+    -c:v libx264
+      -preset veryfast -tune zerolatency
+      -profile:v main -level 4.1
+      -pix_fmt yuv420p
+      -r 30
+      -g 15 -keyint_min 15
+      -b:v 2500k -maxrate 2500k -bufsize 2500k
+      -bf 0
+    -an
+    -f rtsp {output}
+    -map "[jpg]" -update 1 -y /img/home-cams.jpg
+
+  property-cams: >
+    exec:ffmpeg -hide_banner
+    -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1
+    -rtsp_transport tcp -timeout 10000000 -fflags +genpts
+    -thread_queue_size 512 -i rtsp://localhost:8554/driveway_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/doorbell_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/backyard_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/backyard2_sub
+    -filter_complex "
+      [0:v]scale=960:540[v0];
+      [1:v]scale=960:540[v1];
+      [2:v]scale=960:540[v2];
+      [3:v]scale=960:540[v3];
+      [v0][v1][v2][v3]xstack=inputs=4:layout=0_0|960_0|0_540|960_540:shortest=1,fps=30,split=2[v][snap];
+      [snap]fps=1/3[jpg]
+    "
+    -map "[v]"
+    -c:v libx264
+      -preset veryfast -tune zerolatency
+      -profile:v main -level 4.1
+      -pix_fmt yuv420p
+      -r 30
+      -g 15 -keyint_min 15
+      -b:v 2500k -maxrate 2500k -bufsize 2500k
+      -bf 0
+    -an
+    -f rtsp {output}
+    -map "[jpg]" -update 1 -y /img/property-cams.jpg
+
+  all-cams: >
+    exec:ffmpeg -hide_banner
+    -fflags nobuffer -flags low_delay -use_wallclock_as_timestamps 1
+    -rtsp_transport tcp -timeout 10000000 -fflags +genpts
+    -thread_queue_size 512 -i rtsp://localhost:8554/driveway_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/doorbell_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/backyard_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/backyard2_sub
+    -thread_queue_size 512 -i rtsp://localhost:8554/garage
+    -thread_queue_size 512 -i rtsp://localhost:8554/kids-room
+    -thread_queue_size 512 -i rtsp://localhost:8554/basement
+    -thread_queue_size 512 -i rtsp://localhost:8554/basement2
+    -thread_queue_size 512 -i rtsp://localhost:8554/kids-room-2
+    -filter_complex "
+      [0:v]scale=640:360[v0];
+      [1:v]scale=640:360[v1];
+      [2:v]scale=640:360[v2];
+      [3:v]scale=640:360[v3];
+      [4:v]scale=640:360[v4];
+      [5:v]scale=640:360[v5];
+      [6:v]scale=640:360[v6];
+      [7:v]scale=640:360[v7];
+      [8:v]scale=640:360[v8];
+      [v0][v1][v2][v3][v4][v5][v6][v7][v8]xstack=inputs=9:layout=0_0|640_0|1280_0|0_360|640_360|1280_360|0_720|640_720|1280_720:shortest=1,fps=30,split=2[v][snap];
+      [snap]fps=1/3[jpg]
+    "
+    -map "[v]"
+    -c:v libx264
+      -preset veryfast -tune zerolatency
+      -profile:v main -level 4.1
+      -pix_fmt yuv420p
+      -r 30
+      -g 15 -keyint_min 15
+      -b:v 2500k -maxrate 2500k -bufsize 2500k
+      -bf 0
+    -an
+    -f rtsp {output}
+    -map "[jpg]" -update 1 -y /img/all-cams.jpg
+
+ffmpeg:
+  nobframes: "-c:v copy -bf 0"

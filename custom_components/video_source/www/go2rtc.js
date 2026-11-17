@@ -251,8 +251,19 @@ class HttpSignaling {
     }
 
     async getRtcConfig() {
-        // No ICE servers: go2rtc is expected to be reachable on the local network
-        return { configuration: {}, dataChannel: null };
+        // go2rtc doesn't hand ICE servers to its clients (MediaMTX does, via its OPTIONS
+        // response; Home Assistant's built-in go2rtc does via get_client_config). Without a STUN
+        // server the browser has no public ("server reflexive") address to offer, so when the
+        // browser and go2rtc are on different networks neither side can punch through the
+        // NATs and ICE fails - even though signaling (this proxy) works fine.
+        return {
+            configuration: {
+                iceServers: [
+                    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
+                ],
+            },
+            dataChannel: null,
+        };
     }
 
     createSession() {
@@ -305,6 +316,7 @@ export class Go2RtcClient {
     async start() {
         const gen = ++this.generation;
         const current = () => gen === this.generation;
+        this.connectedOnce = false;
         try {
             const { configuration, dataChannel } = await this.signaling.getRtcConfig();
             if (!current()) return;
@@ -376,10 +388,26 @@ export class Go2RtcClient {
         const state = this.pc ? this.pc.iceConnectionState : 'disconnected';
         this.connectionState = state;
         console.log('go2rtc peer connection state:', state);
+        if (state === 'connected' || state === 'completed') {
+            this.connectedOnce = true;
+        }
         if (this.connectionStateCb) {
             this.connectionStateCb(state);
         }
         if (this.isDisconnected()) {
+            if (!this.connectedOnce) {
+                // ICE never connected at all (typically go2rtc's media port is unreachable from
+                // this network). Back off instead of retrying in a hot loop.
+                console.warn(
+                    'go2rtc: could not establish a media connection. If this only happens away from ' +
+                    'your home network, check that go2rtc\'s WebRTC port (webrtc.listen, default 8555, ' +
+                    'TCP and UDP) is forwarded and that webrtc.candidates lists your public address.'
+                );
+                const gen = this.generation;
+                return this.setDelay(5000).then(() => {
+                    if (gen === this.generation) return this.scheduleRestart();
+                });
+            }
             console.log('go2rtc restarting...');
             return this.scheduleRestart();
         }
