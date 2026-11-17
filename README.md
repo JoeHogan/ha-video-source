@@ -84,7 +84,7 @@ Which server a card uses is decided by the integration entry it points to (see `
 ### preview
     Advanced/Optional: Show preview images to reduce memory. See advanced configuration information. 
 
-### twoWayAudio
+### two_way_audio
     Optional (default false): show a press-and-hold microphone button in full screen that sends your microphone audio to the camera speaker. Only available when the card's integration entry is go2rtc (not MediaMTX), requires a camera that supports an audio backchannel, and requires Home Assistant to be accessed over HTTPS (browsers block microphone access otherwise). Pressing the button unmutes the video if it is muted; releasing it stops sending audio but does not re-mute.
 
 ## Card Usage Examples

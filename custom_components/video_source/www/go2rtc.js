@@ -212,7 +212,13 @@ class HttpSession {
                 signal: this.abort.signal,
             });
             if (!res.ok) {
-                throw new Error(`go2rtc responded with HTTP ${res.status}`);
+                const detail = (await res.text().catch(() => '')).trim().slice(0, 200);
+                throw new Error(
+                    `go2rtc responded with HTTP ${res.status} for stream "${this.src}"${detail ? `: ${detail}` : ''}` +
+                    (res.status === 404
+                        ? ' (the resource must be a stream name from your go2rtc config, not a Home Assistant entity id)'
+                        : '')
+                );
             }
             const contentType = res.headers.get('content-type') || '';
             const answer = contentType.includes('json') ? (await res.json())?.sdp : await res.text();
