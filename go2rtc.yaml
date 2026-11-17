@@ -1,6 +1,6 @@
 api:
   listen: ":1984"
-  origin: "*"
+  # origin: "*"
 
 rtsp:
   listen: ":8554"
@@ -13,7 +13,8 @@ log:
 webrtc:
   listen: ":8555"
   candidates:
-    - jthogan.com:8555
+    - stun:8555
+    # - jthogan.com:8555
   ice_servers:
     - urls: [stun:stun.l.google.com:19302]
 
@@ -21,47 +22,47 @@ streams:
 
   # --- Reolink / RTMP Cameras (with RTSP 2-way audio backchannel) ---
   driveway:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DRIVEWAY_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DRIVEWAY_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway.jpg
     - rtsp://admin:${DRIVEWAY_PASSWORD}@192.168.1.25:554/h264Preview_01_sub#backchannel=1
 
   driveway_sub:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DRIVEWAY_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway_sub.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.25/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DRIVEWAY_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/driveway_sub.jpg
     - rtsp://admin:${DRIVEWAY_PASSWORD}@192.168.1.25:554/h264Preview_01_sub#backchannel=1
 
   backyard:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard.jpg
     - rtsp://admin:${BACKYARD_PASSWORD}@192.168.1.26:554/h264Preview_01_sub#backchannel=1
 
   backyard_sub:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard_sub.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.26/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard_sub.jpg
     - rtsp://admin:${BACKYARD_PASSWORD}@192.168.1.26:554/h264Preview_01_sub#backchannel=1
 
   backyard2:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD2_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${BACKYARD2_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2.jpg
     - rtsp://admin:${BACKYARD2_PASSWORD}@192.168.1.29:554/h264Preview_01_sub#backchannel=1
 
   backyard2_sub:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD2_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2_sub.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.29/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${BACKYARD2_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/backyard2_sub.jpg
     - rtsp://admin:${BACKYARD2_PASSWORD}@192.168.1.29:554/h264Preview_01_sub#backchannel=1
 
   doorbell:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DOORBELL_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_main.bcs?channel=0&stream=0&user=admin&password=${DOORBELL_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell.jpg
     - rtsp://admin:${DOORBELL_PASSWORD}@192.168.1.129:554/h264Preview_01_sub#backchannel=1
 
   doorbell_sub:
-    - ffmpeg:#input=-fflags nobuffer -flags low_delay -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DOORBELL_PASSWORD}#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell_sub.jpg
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DOORBELL_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell_sub.jpg
     - rtsp://admin:${DOORBELL_PASSWORD}@192.168.1.129:554/h264Preview_01_sub#backchannel=1
 
   # --- RTSP Cameras ---
-  kids-room: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_LOCAL_PASSWORD}@192.168.1.23/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room.jpg
+  kids-room: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_LOCAL_PASSWORD}@192.168.1.23/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room.jpg
 
-  kids-room-2: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_2_LOCAL_PASSWORD}@192.168.1.22/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room-2.jpg
+  kids-room-2: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_2_LOCAL_PASSWORD}@192.168.1.22/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room-2.jpg
 
-  basement: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT_LOCAL_PASSWORD}@192.168.1.24/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement.jpg
+  basement: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT_LOCAL_PASSWORD}@192.168.1.24/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement.jpg
 
-  basement2: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT2_LOCAL_PASSWORD}@192.168.1.27/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement2.jpg
+  basement2: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT2_LOCAL_PASSWORD}@192.168.1.27/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement2.jpg
 
-  garage: ffmpeg:#input=-fflags nobuffer -flags low_delay -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${GARAGE_LOCAL_PASSWORD}@192.168.1.28/stream1#video=nobframes#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/garage.jpg
+  garage: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${GARAGE_LOCAL_PASSWORD}@192.168.1.28/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/garage.jpg
 
   # --- Tapo Native Streams (H264 passthrough + 2-way audio + Opus fallback) ---
   kids-room-tapo:
@@ -181,6 +182,3 @@ streams:
     -an
     -f rtsp {output}
     -map "[jpg]" -update 1 -y /img/all-cams.jpg
-
-ffmpeg:
-  nobframes: "-c:v copy -bf 0"
