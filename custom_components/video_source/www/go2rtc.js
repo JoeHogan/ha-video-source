@@ -428,35 +428,6 @@ export class Go2RtcClient {
         return new Promise((res) => setTimeout(res, delay || 0));
     }
 
-    // Limit the offer to H.264 (plus its retransmission/FEC helper codecs) and put High
-    // Profile (6400xx) first. go2rtc always sends video using the first H.264 payload type
-    // in the offer without checking profile-level-id; Chrome's default order puts Baseline
-    // (42001f) first, which causes Chrome's decoder to reject High Profile main streams
-    // (packets arrive, framesDecoded stays 0). High Profile decoders handle High, Main, and
-    // Baseline streams.
-    preferH264(transceiver) {
-        try {
-            const codecs = RTCRtpReceiver.getCapabilities?.('video')?.codecs;
-            if (!codecs || !transceiver.setCodecPreferences) return;
-            const rankH264 = (c) => {
-                const fmtp = (c.sdpFmtpLine || '').toLowerCase();
-                const pm1 = fmtp.includes('packetization-mode=1') ? 0 : 10;
-                if (fmtp.includes('profile-level-id=64')) return pm1 + 0;
-                if (fmtp.includes('profile-level-id=4d')) return pm1 + 1;
-                if (fmtp.includes('profile-level-id=42')) return pm1 + 2;
-                return pm1 + 3;
-            };
-            const h264 = codecs
-                .filter((c) => c.mimeType.toLowerCase() === 'video/h264')
-                .sort((a, b) => rankH264(a) - rankH264(b));
-            if (!h264.length) return;
-            const helpers = codecs.filter((c) => /\/(rtx|red|ulpfec)$/i.test(c.mimeType));
-            transceiver.setCodecPreferences([...h264, ...helpers]);
-        } catch (e) {
-            console.log(`go2rtc: unable to set codec preferences: ${e}`);
-        }
-    }
-
     async start() {
         const gen = ++this.generation;
         const current = () => gen === this.generation;
@@ -470,8 +441,7 @@ export class Go2RtcClient {
             if (dataChannel) {
                 pc.createDataChannel(dataChannel);
             }
-            const videoTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
-            this.preferH264(videoTransceiver);
+            pc.addTransceiver('video', { direction: 'recvonly' });
             pc.addTransceiver('audio', { direction: 'recvonly' });
 
             const session = this.signaling.createSession();
