@@ -598,6 +598,9 @@ export class Go2RtcClient {
     }
 
     stopTwoWayAudio() {
+        if (this.backchannel) {
+            console.log('go2rtc backchannel stopped (microphone released, session closed)');
+        }
         this.backchannelActive = false;
         this.backchannelGeneration++;
         this.destroyBackchannel(this.backchannel);
