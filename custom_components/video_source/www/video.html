@@ -91,9 +91,9 @@
     </style>
     <script type="module">
 
-        import { getAccessToken } from "./refreshToken.js";
-        import { WHEPClient } from "./webrtc_v2.js";
-        import { Go2RtcClient } from "./go2rtc.js";
+        import { getAccessToken } from "./refreshToken.js?v=3";
+        import { WHEPClient } from "./webrtc_v2.js?v=3";
+        import { Go2RtcClient } from "./go2rtc.js?v=3";
 
         class VideoControls {
             constructor() {
@@ -178,10 +178,8 @@
             }
 
             getConfig() {
-                let queryString = window.location.href.split("?")[1];
-                let parts = queryString?.split('=') || [];
-                let index = parts.indexOf('config');
-                return index > -1 ? JSON.parse(atob(parts[index + 1])) : {};
+                const encoded = new URLSearchParams(window.location.search).get('config');
+                return encoded ? JSON.parse(atob(encoded)) : {};
             }
 
             play() {

@@ -640,6 +640,13 @@ export class Go2RtcClient {
             stream.getAudioTracks().forEach((track) => {
                 pc.addTransceiver(track, { direction: 'sendonly' });
             });
+            // go2rtc's POST /api/webrtc?src=... handler uses IsConsumer(conn) to decide
+            // whether to call stream.AddConsumer(conn) (which connects our sendonly mic
+            // track to the camera's backchannel) or stream.AddProducer(conn) (which treats
+            // the PeerConnection as an incoming WHIP broadcast source). IsConsumer() only
+            // returns true if the SDP offer includes at least one media section asking to
+            // receive media (recvonly/sendrecv).
+            pc.addTransceiver('audio', { direction: 'recvonly' });
 
             const session = this.signaling.createSession();
             bc.session = session;
@@ -651,31 +658,7 @@ export class Go2RtcClient {
             pc.oniceconnectionstatechange = () => {
                 if (!current()) return;
                 console.log(`go2rtc backchannel connection state: ${pc.iceConnectionState}`);
-                if (pc.iceConnectionState === 'connected') {
-                    setTimeout(async () => {
-                        if (!current()) return;
-                        try {
-                            const stats = await pc.getStats();
-                            stats.forEach((s) => {
-                                if (s.type === 'outbound-rtp') {
-                                    const codec = s.codecId ? stats.get(s.codecId)?.mimeType : undefined;
-                                    console.log(`[backchannel-diag] outbound-rtp: codec=${codec}, packetsSent=${s.packetsSent}, bytesSent=${s.bytesSent}`);
-                                }
-                            });
-                            if (this.signaling.baseUrl) {
-                                const token = await getAccessToken();
-                                const res = await fetch(`${this.signaling.baseUrl}/api/streams?src=${encodeURIComponent(this.signaling.src)}`, {
-                                    headers: { "Authorization": `Bearer ${token}` },
-                                });
-                                if (res.ok) {
-                                    console.log('[backchannel-diag] go2rtc stream state:', await res.text());
-                                }
-                            }
-                        } catch (e) {
-                            console.log(`[backchannel-diag] error: ${e}`);
-                        }
-                    }, 1500);
-                } else if (pc.iceConnectionState === 'failed') {
+                if (pc.iceConnectionState === 'failed') {
                     this.stopTwoWayAudio();
                     this.reportTwoWayAudioError('Two-way audio connection failed');
                 }

@@ -22,10 +22,14 @@ import logging
 _LOGGER = logging.getLogger(__name__)
 
 
-def _asset_version(path: Path) -> str:
-    """Short content hash used as the resource cache-bust tag."""
+def _asset_version(www_dir: Path) -> str:
+    """Short content hash of www/ assets used as the resource cache-bust tag."""
     try:
-        return hashlib.sha1(path.read_bytes()).hexdigest()[:12]
+        h = hashlib.sha1()
+        for file in sorted(www_dir.glob("*")):
+            if file.is_file():
+                h.update(file.read_bytes())
+        return h.hexdigest()[:12]
     except OSError:
         return "0"
 
@@ -74,8 +78,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Register the card as a Lovelace dashboard resource with a content-hash
     # cache-bust tag (HACS-style). Editing the card + restarting HA changes the
     # tag, so every browser auto-refetches it - no manual cache clearing.
-    card_file = path / "video-source-card.js"
-    tag = await hass.async_add_executor_job(_asset_version, card_file)
+    tag = await hass.async_add_executor_job(_asset_version, path)
     await utils.init_resource(hass, f"/{DOMAIN}/video-source-card.js", tag)
 
     return True
