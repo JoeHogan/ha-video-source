@@ -14,7 +14,7 @@
 // This class exposes the same interface as WHEPClient (webrtc_v2.js), plus two-way audio
 // (startTwoWayAudio / stopTwoWayAudio).
 
-import { getAccessToken } from "./refreshToken.js";
+import { getAccessToken } from "./refreshToken.js?v=7";
 
 const getHassConnection = () => {
     const hc = window.hassConnection || window.parent?.hassConnection;

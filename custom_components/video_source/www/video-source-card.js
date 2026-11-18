@@ -404,7 +404,7 @@ class VideoSourceCard extends LitElement {
     }
 
     configToQs() {
-        const tag = new URL(import.meta.url).searchParams.get('hacstag') || '6';
+        const tag = new URL(import.meta.url).searchParams.get('hacstag') || '7';
         return `?v=${encodeURIComponent(tag)}&config=${btoa(JSON.stringify(this.config || {}))}`;
     }
 

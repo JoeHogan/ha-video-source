@@ -1,4 +1,4 @@
-import { getAccessToken } from "./refreshToken.js";
+import { getAccessToken } from "./refreshToken.js?v=7";
 
 const unquoteCredential = (v) => (
     JSON.parse(`"${v}"`)
