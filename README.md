@@ -121,11 +121,12 @@ Which server a card uses is decided by the integration entry it points to (see `
 
 ## Advanced Configuration
 
-You can configure MediaMTX to take snapshots of each camera at intervals (ie: every 3 seconds), and this integration can show those snapshots at an interval until you click on the video to go full screen, at which point the WebRTC stream begins. This is useful for displaying many camera streams on a single dashboard where you have memory constraints (ie: Fire Tablet). See the 'examples/image_preview' folder for instructions on how to configure MediaMTX.
+With `preview: true`, the card displays periodic JPEG snapshots until you tap to go full screen, at which point the live WebRTC stream begins. This is useful for displaying many cameras on a single dashboard where you have memory constraints (e.g. a Fire Tablet).
 
-The important part is that requests are made to the same url/port as MediaMTX, but include /img/ in the path. You may use Nginx or similar to properly route requests for /img/ to your image folder while all other paths route though to MediaMTX.
+- **go2rtc (your own instance):** Works out of the box using go2rtc's `/api/frame.jpeg?src=<stream>&w=500` endpoint.
+- **MediaMTX:** You can configure MediaMTX to save snapshots of each camera at intervals (e.g. every 3 seconds) and serve them under `/img/<stream>.jpg` on the same URL/port (for example via Nginx). See the `examples/image_preview` folder for instructions.
 
-Once configured, you may simply add the 'preview' property:
+Once configured, simply add the `preview` property:
 
 ```
   - type: custom:video-source-card

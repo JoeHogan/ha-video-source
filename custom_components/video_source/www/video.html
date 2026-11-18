@@ -153,8 +153,8 @@
                 this.config.entry_id = entry.entry_id;
                 this.config.source = entry.source;
                 this.config.builtin = entry.builtin;
-                if (this.config.source === 'go2rtc') {
-                    this.config.preview = false; // image previews are only available for MediaMTX
+                if (this.config.source === 'go2rtc' && this.config.builtin) {
+                    this.config.preview = false; // built-in go2rtc has no HTTP service URL to proxy image previews to
                 }
                 const ClientClass = this.config.source === 'go2rtc' ? Go2RtcClient : WHEPClient;
                 this.client = new ClientClass(this.config, {
@@ -357,7 +357,12 @@
                         setTimeout(async () => {
                             let access_token = await getAccessToken();
                             if (this.image) {
-                                this.image.src = `/api/ha-video-source/${this.config.entry_id || 'default'}/img/${this.config.resource}.jpg?token=${access_token}&time=${new Date().toISOString()}`;
+                                const entryId = encodeURIComponent(this.config.entry_id || 'default');
+                                const resource = encodeURIComponent(this.config.resource);
+                                const params = `token=${access_token}&time=${new Date().toISOString()}`;
+                                this.image.src = this.config.source === 'go2rtc'
+                                    ? `/api/ha-video-source/${entryId}/api/frame.jpeg?src=${resource}&w=500&${params}`
+                                    : `/api/ha-video-source/${entryId}/img/${resource}.jpg?${params}`;
                             }
                             if (!this.fullscreen) {
                                 step(this.config.previewInterval || 3000);
