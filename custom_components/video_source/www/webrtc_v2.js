@@ -125,6 +125,7 @@ export class WHEPClient {
         this.connectionStateCb = options?.connectionStateCb || null;
         this.queuedCandidates = [];
         this.retryCb = options?.retryCb || null;
+        this.generation = 0;
     }
 
     get resourceUrl() {
@@ -133,8 +134,10 @@ export class WHEPClient {
     }
 
     async start() {
+        const gen = ++this.generation;
         console.log("requesting ICE servers");
         let access_token = await getAccessToken();
+        if (gen !== this.generation) return;
         return fetch(this.resourceUrl + `/whep`, {
             method: 'OPTIONS',
             headers: {
@@ -142,8 +145,12 @@ export class WHEPClient {
                 "Content-Type": "application/json",
             },
         })
-            .then((res) => this.onIceServers(res))
+            .then((res) => {
+                if (gen !== this.generation) return;
+                return this.onIceServers(res);
+            })
             .catch((err) => {
+                if (gen !== this.generation) return;
                 if (Array.isArray(this.url)) {
                     this.urlIndex = this.url.length > this.urlIndex + 1 ? this.urlIndex + 1 : 0;
                 }
@@ -154,12 +161,17 @@ export class WHEPClient {
 
     handleConnectionError(err) {
         console.log('error: ' + err);
+        const gen = this.generation;
         if (this.retryCb) {
             if (this.retryCb(this.pc)) {
-                return this.setDelay(5000).then(() => this.scheduleRestart());
+                return this.setDelay(5000).then(() => {
+                    if (gen === this.generation) return this.scheduleRestart();
+                });
             }
         } else {
-            return this.setDelay(5000).then(() => this.scheduleRestart());
+            return this.setDelay(5000).then(() => {
+                if (gen === this.generation) return this.scheduleRestart();
+            });
         }
         return err;
     }
@@ -358,7 +370,15 @@ export class WHEPClient {
     }
 
     stop() {
+        this.generation++;
         if (this.pc !== null) {
+            try {
+                this.pc.getReceivers?.().forEach((r) => r.track?.stop());
+                this.pc.getSenders?.().forEach((s) => s.track?.stop());
+            } catch (_) { /* ignore */ }
+            this.pc.ontrack = null;
+            this.pc.onicecandidate = null;
+            this.pc.oniceconnectionstatechange = null;
             this.dc = null;
             this.pc.close();
             this.pc = null;

@@ -562,6 +562,10 @@ export class Go2RtcClient {
         this.stopTwoWayAudio();
         this.closeSession();
         if (this.pc !== null) {
+            try {
+                this.pc.getReceivers?.().forEach((r) => r.track?.stop());
+                this.pc.getSenders?.().forEach((s) => s.track?.stop());
+            } catch (_) { /* ignore */ }
             this.pc.ontrack = null;
             this.pc.onicecandidate = null;
             this.pc.oniceconnectionstatechange = null;

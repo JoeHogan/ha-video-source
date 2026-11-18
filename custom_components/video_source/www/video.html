@@ -91,14 +91,18 @@
     </style>
     <script type="module">
 
-        import { getAccessToken } from "./refreshToken.js?v=3";
-        import { WHEPClient } from "./webrtc_v2.js?v=3";
-        import { Go2RtcClient } from "./go2rtc.js?v=3";
+        import { getAccessToken } from "./refreshToken.js?v=6";
+        import { WHEPClient } from "./webrtc_v2.js?v=6";
+        import { Go2RtcClient } from "./go2rtc.js?v=6";
 
         class VideoControls {
             constructor() {
                 this.loading = true;
                 this.fullscreen = false;
+                this.initialized = false;
+                this.backgroundPaused = false;
+                this.previewTimer = null;
+                this.previewGeneration = 0;
                 this.config = this.getConfig();
                 this.container = document.getElementById('body');
                 this.container.classList.add(this.config.orientation || 'horizontal')
@@ -111,8 +115,11 @@
                 this.video.muted = true;
                 this.video.autoplay = true;
                 this.video.playsInline = true;
-                this.video.onpause = () => this.play();
-                this.video.onsuspend = () => this.play();
+                this.video.onpause = () => {
+                    if (!this.playingImagePreview && this.video?.srcObject) {
+                        this.play();
+                    }
+                };
                 this.canvas = document.createElement('canvas');
                 this.canvas.setAttribute("id", "canvas");
                 this.ctx = this.canvas.getContext("2d");
@@ -170,7 +177,8 @@
                     key: 'capabilities',
                     value: { two_way_audio: this.config.source === 'go2rtc' },
                 }, window.location.origin);
-                if (this.config.preview) {
+                this.initialized = true;
+                if (this.config.preview && !this.fullscreen) {
                     this.playImagePreview();
                 } else {
                     this.restartStream();
@@ -222,12 +230,13 @@
             connectionStateCb(state) {
                 this.setState(state);
                 console.log(`${this.config.resource} connection state changed: ${this.state}`);
-                if (['failed', 'closed', 'disconnected', 'connected', 'checking', 'new'].indexOf(this.state) === -1) {
-                    alert(`${this.config.resource} state: ${this.state}`);
+                if (['failed', 'closed', 'disconnected', 'connected', 'completed', 'checking', 'new'].indexOf(this.state) === -1) {
+                    console.warn(`${this.config.resource} unexpected state: ${this.state}`);
                 }
+                const isConnected = this.state === 'connected' || this.state === 'completed';
                 if (this.playingImagePreview) {
                     this.toggleLoading(false);
-                } else if (this.state !== 'connected') {
+                } else if (!isConnected) {
                     this.toggleLoading(true);
                 } else {
                     this.toggleLoading(false);
@@ -244,14 +253,23 @@
             onTrackCb(evt) {
                 if (evt?.streams?.length) {
                     console.log(`New ${this.config.resource} track: ${evt.track.kind}, streams: ${evt.streams.length}`);
-                    if (this.video.srcObject !== evt.streams[0]) {
-                        this.video.srcObject = evt.streams[0];
+                    const nextStream = evt.streams[0];
+                    if (this.video.srcObject !== nextStream) {
+                        if (this.video.srcObject) {
+                            try {
+                                this.video.srcObject.getTracks?.().forEach((t) => t.stop());
+                            } catch (_) { /* ignore */ }
+                        }
+                        this.video.srcObject = nextStream;
                     }
                     this.play();
                 }
             }
 
             restartStream() {
+                if (!this.initialized) {
+                    return;
+                }
                 this.toggleLoading(true);
                 this.client?.scheduleRestart();
             }
@@ -260,6 +278,11 @@
                 this.client?.stopTwoWayAudio?.();
                 this.video?.pause();
                 if (this.video) {
+                    if (this.video.srcObject) {
+                        try {
+                            this.video.srcObject.getTracks?.().forEach((t) => t.stop());
+                        } catch (_) { /* ignore */ }
+                    }
                     this.video.srcObject = null;
                     this.video.removeAttribute('src');
                     this.video.load();
@@ -292,17 +315,21 @@
                 if (this.fullscreen) {
                     this.container.classList.add(className);
                     this.toggleMute(fromEvent);
-                    this.togglePreview(false);
+                    if (this.initialized) {
+                        this.togglePreview(false);
+                    }
                 } else {
                     this.container.classList.remove(className);
                     this.toggleMute(true);
-                    this.togglePreview(true);
+                    if (this.initialized) {
+                        this.togglePreview(true);
+                    }
                 }
             }
 
             toggleMute(mute) {
                 this.video.muted = mute || false;
-                if (!this.video.muted && !this.isPlaying()) {
+                if (this.initialized && !this.playingImagePreview && !this.video.muted && !this.isPlaying()) {
                     this.play();
                 }
             }
@@ -316,10 +343,19 @@
                         this.playVideoPreview();
                     }
                 } else {
-                    this.playingImagePreview = false;
+                    this.stopImagePreview();
                     if (this.config.preview) {
                         this.restartStream();
                     }
+                }
+            }
+
+            setBackgroundPaused(paused) {
+                const wasPaused = this.backgroundPaused;
+                this.backgroundPaused = Boolean(paused);
+                if (wasPaused && !this.backgroundPaused && this.playingImagePreview && !this.fullscreen) {
+                    this.stopImagePreview();
+                    this.playImagePreview();
                 }
             }
 
@@ -347,27 +383,69 @@
                 }
             }
 
-            async playImagePreview() {
-                if (!this.playingImagePreview) {
-                    this.playingImagePreview = true;
-                    this.toggleLoading(false);
-                    this.setState('preview');
-
-                    const step = (delay) => {
-                        setTimeout(async () => {
-                            let access_token = await getAccessToken();
-                            if (this.image) {
-                                this.image.src = `/api/ha-video-source/${this.config.entry_id || 'default'}/img/${this.config.resource}.jpg?token=${access_token}&time=${new Date().toISOString()}`;
-                            }
-                            if (!this.fullscreen) {
-                                step(this.config.previewInterval || 3000);
-                            } else {
-                                this.playingImagePreview = false;
-                            }
-                        }, delay || 0);
-                    }
-                    step();
+            stopImagePreview() {
+                this.playingImagePreview = false;
+                this.previewGeneration = (this.previewGeneration || 0) + 1;
+                if (this.previewTimer) {
+                    clearTimeout(this.previewTimer);
+                    this.previewTimer = null;
                 }
+                if (this.image) {
+                    this.image.onload = null;
+                    this.image.onerror = null;
+                    this.image.removeAttribute('src');
+                }
+            }
+
+            playImagePreview() {
+                if (this.playingImagePreview) {
+                    return;
+                }
+                this.playingImagePreview = true;
+                const gen = (this.previewGeneration = (this.previewGeneration || 0) + 1);
+                this.toggleLoading(false);
+                this.setState('preview');
+
+                const scheduleNext = (delay) => {
+                    if (!this.playingImagePreview || this.fullscreen || gen !== this.previewGeneration) {
+                        return;
+                    }
+                    if (this.previewTimer) {
+                        clearTimeout(this.previewTimer);
+                    }
+                    this.previewTimer = setTimeout(loadFrame, delay);
+                };
+
+                const loadFrame = async () => {
+                    this.previewTimer = null;
+                    if (!this.playingImagePreview || this.fullscreen || gen !== this.previewGeneration) {
+                        return;
+                    }
+                    if (this.backgroundPaused || document.hidden) {
+                        scheduleNext(this.config.previewInterval || 3000);
+                        return;
+                    }
+                    let access_token = await getAccessToken();
+                    if (!this.playingImagePreview || this.fullscreen || gen !== this.previewGeneration) {
+                        return;
+                    }
+                    if (this.image) {
+                        const done = () => {
+                            if (this.image) {
+                                this.image.onload = null;
+                                this.image.onerror = null;
+                            }
+                            scheduleNext(this.config.previewInterval || 3000);
+                        };
+                        this.image.onload = done;
+                        this.image.onerror = done;
+                        this.image.src = `/api/ha-video-source/${this.config.entry_id || 'default'}/img/${this.config.resource}.jpg?token=${access_token}&time=${new Date().toISOString()}`;
+                    } else {
+                        scheduleNext(this.config.previewInterval || 3000);
+                    }
+                };
+
+                scheduleNext(0);
             }
 
         };
@@ -387,6 +465,8 @@
                     controls.restartStream();
                 } else if (key === 'two_way_audio') {
                     controls.toggleTwoWayAudio(value || false);
+                } else if (key === 'background_paused') {
+                    controls.setBackgroundPaused(value || false);
                 }
             };
         });

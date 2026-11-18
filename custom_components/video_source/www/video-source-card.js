@@ -11,10 +11,13 @@ const SUPPORTED_ASPECT_RATIOS = {
     '16/9': '16 / 9',
 };
 
+const activeFullscreenCards = new Set();
+
 class VideoSourceCard extends LitElement {
 
     constructor() {
         super();
+        this._hass = null;
         this.fullscreen = false;
         this.mute = true;
         this.talking = false;
@@ -28,9 +31,45 @@ class VideoSourceCard extends LitElement {
 
     static get properties() {
         return {
-            hass: {},
             config: {},
         };
+    }
+
+    get hass() {
+        return this._hass;
+    }
+
+    set hass(value) {
+        const oldHass = this._hass;
+        this._hass = value;
+        if (!oldHass) {
+            this.requestUpdate();
+            return;
+        }
+        const entities = this.getWatchedEntities();
+        for (const entityId of entities) {
+            if (oldHass.states?.[entityId]?.state !== value?.states?.[entityId]?.state) {
+                this.requestUpdate();
+                return;
+            }
+        }
+    }
+
+    getWatchedEntities() {
+        const entities = [];
+        if (this.config?.activity) {
+            const list = Array.isArray(this.config.activity) ? this.config.activity : [this.config.activity];
+            for (const item of list) {
+                if (item?.entity) entities.push(item.entity);
+            }
+        }
+        if (this.config?.event) {
+            const list = Array.isArray(this.config.event) ? this.config.event : [this.config.event];
+            for (const item of list) {
+                if (item?.entity) entities.push(item.entity);
+            }
+        }
+        return entities;
     }
 
     render() {
@@ -173,16 +212,22 @@ class VideoSourceCard extends LitElement {
                     this.hasOngoingEvents = true;
                     if (!this.fullscreen) {
                         this.fullScreenAutoToggled = true;
-                        this.toggleFullscreen();
+                        queueMicrotask(() => {
+                            if (!this.fullscreen && this.hasOngoingEvents) {
+                                this.toggleFullscreen();
+                            }
+                        });
                     }
                 }
             } else if (this.hasOngoingEvents) {
                 this.hasOngoingEvents = false;
                 if (this.fullscreen && this.fullScreenAutoToggled) {
-                    if (this.fullscreen) {
-                        this.toggleFullscreen();
-                    }
                     this.fullScreenAutoToggled = false;
+                    queueMicrotask(() => {
+                        if (this.fullscreen && !this.hasOngoingEvents) {
+                            this.toggleFullscreen();
+                        }
+                    });
                 }
             }
 
@@ -207,11 +252,13 @@ class VideoSourceCard extends LitElement {
         this.fullscreen = this.fullscreen ? false : true;
         const wasAutoToggled = this.fullScreenAutoToggled;
         if (this.fullscreen) {
+            activeFullscreenCards.add(this);
             if (e) {
                 this.mute = false;
                 this.fullScreenAutoToggled = false;
             }
         } else {
+            activeFullscreenCards.delete(this);
             if (this.talking) {
                 this.talking = false;
                 this.postMessage('two_way_audio', false);
@@ -223,6 +270,7 @@ class VideoSourceCard extends LitElement {
                 this.dismissedEvents.add(event.entity); // remember user dismissed this event
             });
         }
+        window.dispatchEvent(new CustomEvent('video-source-fullscreen-change'));
         const key = (this.fullScreenAutoToggled || (wasAutoToggled && !e) || !e) ? 'autofullscreen' : 'fullscreen';
         this.postMessage(key, this.fullscreen);
         this.postMessage('mute', this.mute);
@@ -279,13 +327,23 @@ class VideoSourceCard extends LitElement {
         }
     };
 
+    onFullscreenChange = () => {
+        const otherFullscreen = activeFullscreenCards.size > 0 && !activeFullscreenCards.has(this);
+        this.postMessage('background_paused', otherFullscreen);
+    };
+
     connectedCallback() {
         super.connectedCallback();
         window.addEventListener('message', this.onIframeMessage);
+        window.addEventListener('video-source-fullscreen-change', this.onFullscreenChange);
     }
 
     disconnectedCallback() {
         window.removeEventListener('message', this.onIframeMessage);
+        window.removeEventListener('video-source-fullscreen-change', this.onFullscreenChange);
+        if (activeFullscreenCards.delete(this)) {
+            window.dispatchEvent(new CustomEvent('video-source-fullscreen-change'));
+        }
         if (this.talking) {
             this.talking = false;
             this.postMessage('two_way_audio', false);
@@ -340,12 +398,13 @@ class VideoSourceCard extends LitElement {
             const key = this.fullScreenAutoToggled ? 'autofullscreen' : 'fullscreen';
             this.postMessage(key, this.fullscreen);
             this.postMessage('mute', this.mute);
+            this.onFullscreenChange();
         };
         this.iframe.src = `/video_source/video.html${this.configToQs()}`;
     }
 
     configToQs() {
-        const tag = new URL(import.meta.url).searchParams.get('hacstag') || '5';
+        const tag = new URL(import.meta.url).searchParams.get('hacstag') || '6';
         return `?v=${encodeURIComponent(tag)}&config=${btoa(JSON.stringify(this.config || {}))}`;
     }
 
@@ -453,7 +512,7 @@ class VideoSourceCard extends LitElement {
         }
         .webrtc-video-overlay {
             position: absolute;
-            z-index: 0;
+            z-index: 2;
             top: 0;
             left: 0;
             right: 0;
@@ -528,6 +587,7 @@ class VideoSourceCard extends LitElement {
             width: 100%;
             height: 100%;
             border: none;
+            pointer-events: none;
         }
         @-webkit-keyframes activity {
             from, to {

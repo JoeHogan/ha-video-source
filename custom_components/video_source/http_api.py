@@ -180,11 +180,21 @@ async def async_register_http(hass: HomeAssistant) -> None:
                 response_body = await resp.read()
 
                 # Forward most headers except hop-by-hop or CORS-related
+                is_preview_img = tail.startswith("img/")
+                skipped_headers = (
+                    _SKIPPED_RESPONSE_HEADERS
+                    + ("cache-control", "pragma", "expires", "etag", "last-modified")
+                    if is_preview_img
+                    else _SKIPPED_RESPONSE_HEADERS
+                )
                 response_headers = {
                     k: v
                     for k, v in dict(resp.headers).items()
-                    if k.lower() not in _SKIPPED_RESPONSE_HEADERS
+                    if k.lower() not in skipped_headers
                 }
+                if is_preview_img:
+                    response_headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+                    response_headers["Pragma"] = "no-cache"
 
                 return web.Response(
                     body=response_body,
