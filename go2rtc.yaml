@@ -7,16 +7,14 @@ rtsp:
 
 log:
   # exec: trace
-  # tapo: trace
+  streams: trace
+  webrtc: trace
   format: text
 
 webrtc:
   listen: ":8555"
   candidates:
-    - stun:8555
-    # - jthogan.com:8555
-  ice_servers:
-    - urls: [stun:stun.l.google.com:19302]
+    - jthogan.com:58555
   filters:
     networks: [tcp4]
 
@@ -55,37 +53,26 @@ streams:
     - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -rw_timeout 10000000 -i rtmp://192.168.1.129/bcs/channel0_sub.bcs?channel=0&stream=1&user=admin&password=${DOORBELL_PASSWORD}#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/doorbell_sub.jpg
     - rtsp://admin:${DOORBELL_PASSWORD}@192.168.1.129:554/h264Preview_01_sub#backchannel=1
 
-  # --- RTSP Cameras ---
-  kids-room: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_LOCAL_PASSWORD}@192.168.1.23/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room.jpg
-
-  kids-room-2: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_2_LOCAL_PASSWORD}@192.168.1.22/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room-2.jpg
-
-  basement: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT_LOCAL_PASSWORD}@192.168.1.24/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement.jpg
-
-  basement2: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT2_LOCAL_PASSWORD}@192.168.1.27/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement2.jpg
-
-  garage: ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${GARAGE_LOCAL_PASSWORD}@192.168.1.28/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/garage.jpg
-
-  # --- Tapo Native Streams (H264 passthrough + 2-way audio + Opus fallback) ---
-  kids-room-tapo:
+  # --- RTSP + Tapo 2-Way Audio Cameras ---
+  kids-room:
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_LOCAL_PASSWORD}@192.168.1.23/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room.jpg
     - tapo://${KIDS_ROOM_CLOUD_PASSWORD}@192.168.1.23
-    - ffmpeg:kids-room-tapo#audio=opus
 
-  kids-room-2-tapo:
+  kids-room-2:
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${KIDS_ROOM_2_LOCAL_PASSWORD}@192.168.1.22/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/kids-room-2.jpg
     - tapo://${KIDS_ROOM_2_CLOUD_PASSWORD}@192.168.1.22
-    - ffmpeg:kids-room-2-tapo#audio=opus
 
-  basement-tapo:
+  basement:
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT_LOCAL_PASSWORD}@192.168.1.24/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement.jpg
     - tapo://${BASEMENT_CLOUD_PASSWORD}@192.168.1.24
-    - ffmpeg:basement-tapo#audio=opus
 
-  basement2-tapo:
+  basement2:
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${BASEMENT2_LOCAL_PASSWORD}@192.168.1.27/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/basement2.jpg
     - tapo://${BASEMENT2_CLOUD_PASSWORD}@192.168.1.27
-    - ffmpeg:basement2-tapo#audio=opus
 
-  garage-tapo:
+  garage:
+    - ffmpeg:#input=-hwaccel vaapi -hwaccel_device /dev/dri/renderD129 -timeout 10000000 -rtsp_transport tcp -i rtsp://joseph.t.hogan:${GARAGE_LOCAL_PASSWORD}@192.168.1.28/stream1#video=copy#audio=opus#raw=-vf fps=1/3 -update 1 -y /img/garage.jpg
     - tapo://${GARAGE_CLOUD_PASSWORD}@192.168.1.28
-    - ffmpeg:garage-tapo#audio=opus
 
   # --- Multi-Camera Mosaics ---
   home-cams: >

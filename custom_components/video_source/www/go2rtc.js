@@ -460,7 +460,7 @@ export class Go2RtcClient {
 
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            if (!session.trickle) {
+            if (!session.trickle && configuration.iceServers?.length) {
                 await waitForIceGathering(pc);
             }
             if (!current()) return;
@@ -651,7 +651,31 @@ export class Go2RtcClient {
             pc.oniceconnectionstatechange = () => {
                 if (!current()) return;
                 console.log(`go2rtc backchannel connection state: ${pc.iceConnectionState}`);
-                if (pc.iceConnectionState === 'failed') {
+                if (pc.iceConnectionState === 'connected') {
+                    setTimeout(async () => {
+                        if (!current()) return;
+                        try {
+                            const stats = await pc.getStats();
+                            stats.forEach((s) => {
+                                if (s.type === 'outbound-rtp') {
+                                    const codec = s.codecId ? stats.get(s.codecId)?.mimeType : undefined;
+                                    console.log(`[backchannel-diag] outbound-rtp: codec=${codec}, packetsSent=${s.packetsSent}, bytesSent=${s.bytesSent}`);
+                                }
+                            });
+                            if (this.signaling.baseUrl) {
+                                const token = await getAccessToken();
+                                const res = await fetch(`${this.signaling.baseUrl}/api/streams?src=${encodeURIComponent(this.signaling.src)}`, {
+                                    headers: { "Authorization": `Bearer ${token}` },
+                                });
+                                if (res.ok) {
+                                    console.log('[backchannel-diag] go2rtc stream state:', await res.text());
+                                }
+                            }
+                        } catch (e) {
+                            console.log(`[backchannel-diag] error: ${e}`);
+                        }
+                    }, 1500);
+                } else if (pc.iceConnectionState === 'failed') {
                     this.stopTwoWayAudio();
                     this.reportTwoWayAudioError('Two-way audio connection failed');
                 }
@@ -659,7 +683,7 @@ export class Go2RtcClient {
 
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            if (!session.trickle) {
+            if (!session.trickle && configuration.iceServers?.length) {
                 await waitForIceGathering(pc);
             }
             if (!current()) {
